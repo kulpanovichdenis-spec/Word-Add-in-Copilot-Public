@@ -1,0 +1,136 @@
+# Реестр действий панели Word-Add-in-Copilot (ТЗ, раздел 8).
+#
+# Каждое действие = кнопка в панели. Добавить кнопку — дописать блок сюда
+# и нажать «Перечитать действия» в tray (или перезапустить хост). Пересборка не нужна.
+#
+# Поля:
+#   id                  уникальный идентификатор (латиница, дефисы)
+#   label               подпись кнопки
+#   skill               имя навыка: skills/<skill>/SKILL.md в папке legal-copilot
+#   input               selection | paragraph | document — что берётся из документа
+#   resultType          card | review | checklist | text; file запрещён политикой безопасности
+#   schema              путь к схеме ответа внутри legal-copilot (обязателен для card, review и checklist)
+#   duration            short (ответ ждём в панели) | long (фоновая задача)
+#   requiresConfirmation  спрашивать подтверждение перед отправкой текста
+#   requiresInstruction показывать форму задачи юриста; её отправка заменяет отдельное подтверждение
+#   autoApply           после review сразу внести привязанные правки и комментарии через Word
+#   engine              default | local-tools — нужен ли движок с локальными MCP-инструментами
+#   counterparty-check обрабатывается хостом локально и движок не запускает
+#   access              только read; write запрещён политикой безопасности
+#   capabilities        исчерпывающий allowlist данных и возможностей для модели
+#   requiredFiles       обязательные файлы legal-copilot; без них действие недоступно
+
+actions:
+  - id: clause-review
+    label: "Анализировать пункт"
+    skill: word-clause-review
+    input: selection
+    resultType: card
+    schema: references/clause-review-response-schema.md
+    duration: short
+    requiresConfirmation: false
+    capabilities:
+      - legal-methodology-read
+      - clause-cards-read
+      - related-documents-read
+      - counterparty-summary-read
+    requiredFiles:
+      - references/contract-playbook.md
+      - references/risk-scale.md
+
+  - id: contract-review
+    label: "Разобрать документ целиком"
+    skill: word-contract-review
+    input: document
+    resultType: review
+    schema: references/contract-review-response-schema.md
+    duration: long
+    requiresConfirmation: true
+    capabilities:
+      - legal-methodology-read
+      - clause-cards-read
+      - related-documents-read
+      - counterparty-summary-read
+    requiredFiles:
+      - references/contract-playbook.md
+      - references/risk-scale.md
+
+  - id: contract-auto-apply
+    label: "Сразу внести правки"
+    description: "Проверить документ и сразу внести однозначно привязанные редакции с комментариями в режиме рецензирования"
+    skill: word-contract-review
+    input: document
+    resultType: review
+    schema: references/contract-review-response-schema.md
+    duration: long
+    requiresConfirmation: true
+    autoApply: true
+    capabilities:
+      - legal-methodology-read
+      - clause-cards-read
+      - related-documents-read
+      - counterparty-summary-read
+    requiredFiles:
+      - references/contract-playbook.md
+      - references/risk-scale.md
+
+  - id: lawyer-instruction
+    label: "Правка юриста"
+    description: "Проанализировать весь открытый договор или приложение строго по задаче, сформулированной юристом"
+    skill: word-lawyer-instruction
+    input: document
+    resultType: review
+    schema: references/contract-review-response-schema.md
+    duration: long
+    requiresConfirmation: false
+    requiresInstruction: true
+    capabilities:
+      - legal-methodology-read
+      - clause-cards-read
+      - related-documents-read
+      - counterparty-summary-read
+    requiredFiles:
+      - references/contract-playbook.md
+      - references/risk-scale.md
+
+  - id: contract-checklist
+    label: "Проверка чек-лист"
+    description: "Проверить документ по фиксированному корпоративному перечню требований"
+    skill: word-contract-checklist
+    input: document
+    resultType: checklist
+    schema: profile/knowledge/contract-checklist/contract-checklist-response-schema.md
+    duration: long
+    requiresConfirmation: true
+    capabilities:
+      - contract-checklist-read
+      - related-documents-read
+    requiredFiles:
+      - profile/knowledge/contract-checklist/word-contract-checklist.md
+
+  - id: template-compare
+    label: "Сверить с типовой формой"
+    description: "Найти типовую форму в SharePoint и сравнить с открытым документом после подтверждения выбора"
+    skill: word-contract-review
+    input: document
+    resultType: review
+    schema: references/contract-review-response-schema.md
+    duration: long
+    capabilities:
+      - legal-methodology-read
+      - typical-template-read
+    requiredFiles:
+      - references/contract-playbook.md
+      - references/risk-scale.md
+
+  - id: counterparty-check
+    label: "Проверить контрагента"
+    description: "Локальный запрос по ИНН или ОГРН и вывод карточки DaData без сверки с договором"
+    skill: counterparty-check
+    input: document
+    resultType: card
+    schema: references/counterparty-check-response-schema.md
+    duration: short
+    # Нажатие отдельной кнопки проверки уже является явным подтверждением
+    # запроса в DaData; дополнительный диалог только дублировал действие.
+    requiresConfirmation: false

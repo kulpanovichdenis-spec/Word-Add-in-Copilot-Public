@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Word-Add-in-Copilot-Public</title>
+  <link rel="stylesheet" href="/static/taskpane.css?v={{APP_VERSION}}">
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script src="/static/taskpane.js?v={{APP_VERSION}}" defer></script>
+</head>
+<body>
+  <header class="bar">
+    <span class="title">Word-Add-in-Copilot-Public</span>
+    <span id="status" class="status" title="">…</span>
+  </header>
+
+  <div id="banner" class="banner" role="alert" hidden></div>
+  <section id="pairing" class="zone">
+    <h2>Подключить панель</h2>
+    <form id="pairing-form">
+      <label>Одноразовый код из окна приложения
+        <input id="pairing-code" type="password" autocomplete="off" required minlength="32" maxlength="32">
+      </label>
+      <p class="hint">В настройках приложения нажмите «Выдать код панели». Код действует 5 минут.</p>
+      <div class="row"><button id="pairing-submit" class="primary" type="submit">Подключить</button></div>
+    </form>
+  </section>
+
+  <main id="workspace" hidden>
+  <section class="zone">
+    <details id="context">
+      <summary>Контекст <span id="context-summary" class="muted"></span></summary>
+      <div class="fields">
+        <label>Тип договора
+          <select id="ctx-contractType">
+            <option value="">Не указан</option>
+            <option>поставка</option><option>подряд</option><option>оказание услуг</option>
+            <option>лицензионный</option><option>контрактное производство</option><option>аренда</option>
+            <option>дополнительное соглашение</option><option>купля-продажа</option><option>nda</option>
+          </select>
+        </label>
+        <label>Наша сторона
+          <select id="ctx-ourRole">
+            <option value="">Не указана</option>
+            <option>покупатель</option><option>поставщик</option><option>заказчик</option>
+            <option>исполнитель</option><option>лицензиар</option><option>лицензиат</option>
+            <option>арендодатель</option><option>арендатор</option><option>продавец</option><option>подрядчик</option>
+          </select>
+        </label>
+        <p class="hint">Контекст хранится только на этом компьютере и привязан к документу.</p>
+        <p id="context-warning" class="related-warning" hidden></p>
+      </div>
+    </details>
+  </section>
+
+  <section class="zone" id="related-documents-zone">
+    <h2>Документы для анализа</h2>
+    <input id="related-files" type="file" accept=".pdf,.docx,.txt" multiple hidden>
+    <button id="related-add">Добавить документы</button>
+    <p id="related-summary" class="hint">Документы не добавлены.</p>
+    <div id="related-documents" class="related-documents"></div>
+    <p class="hint">PDF, DOCX и TXT. Копии и извлечённый текст хранятся только до закрытия приложения. В анализ попадают документы с установленным флажком.</p>
+  </section>
+
+  <section class="zone" id="counterparty-zone">
+    <h2>Проверка контрагента</h2>
+    <div class="fields">
+      <label>ИНН или ОГРН
+        <input id="counterparty-id" inputmode="numeric" maxlength="15" autocomplete="off" placeholder="10, 12, 13 или 15 цифр">
+      </label>
+      <button id="counterparty-check" class="primary">Проверить контрагента</button>
+      <p id="counterparty-status" class="hint">Контрагент не проверен.</p>
+      <p class="hint">Если поле пустое, ИНН/ОГРН будет извлечён локально из раздела реквизитов. В DaData передаётся только выбранный идентификатор; модель не получает реквизиты и не участвует в проверке.</p>
+    </div>
+  </section>
+
+  <section class="zone">
+    <h2>Действия</h2>
+    <div id="debug-input" hidden>
+      <label>Текст (отладка вне Word)
+        <textarea id="debug-text" rows="5"></textarea>
+      </label>
+    </div>
+    <div id="actions" class="actions"></div>
+    <p id="selection-hint" class="hint"></p>
+    <div id="template-panel" class="instruction-panel" hidden>
+      <h3>Сверка с типовой формой</h3>
+      <p id="template-status" class="hint" role="status"></p>
+      <label for="template-form" id="template-choices" hidden>Типовая форма SharePoint
+        <select id="template-form"></select>
+      </label>
+      <p id="template-selected" class="hint" aria-live="polite"></p>
+      <p class="hint">Форма скачивается во временную локальную копию. Оригинал на SharePoint не изменяется и не пересохраняется.</p>
+      <p class="hint">При запуске сверки обезличенный текст документа и выбранной формы отправится модели.</p>
+      <div class="row">
+        <button id="template-run" class="primary" disabled>Начать сверку</button>
+        <button id="template-cancel">Отмена</button>
+      </div>
+    </div>
+    <div id="instruction-panel" class="instruction-panel" hidden>
+      <h3 id="instruction-title">Правка юриста</h3>
+      <label for="lawyer-instruction">Задача
+        <textarea id="lawyer-instruction" rows="5" maxlength="4000" placeholder="Например: проверь порядок расторжения и предложи редакцию в пользу заказчика"></textarea>
+      </label>
+      <p id="instruction-hint" class="hint"></p>
+      <div class="row">
+        <button id="instruction-run" class="primary">Проверить по задаче</button>
+        <button id="instruction-cancel">Отмена</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="zone" id="result-zone" hidden>
+    <h2>Результат</h2>
+    <div id="confirm" class="confirm" hidden>
+      <p id="confirm-text"></p>
+      <div class="row">
+        <button id="confirm-yes" class="primary">Отправить</button>
+        <button id="confirm-no">Отмена</button>
+      </div>
+    </div>
+    <div id="progress" class="progress" hidden>
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="progress-text"></span>
+      <button id="cancel-btn" hidden>Отменить</button>
+    </div>
+    <div id="usage" class="usage" hidden></div>
+    <div id="result"></div>
+  </section>
+
+  </main>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>

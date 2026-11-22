@@ -1,0 +1,14 @@
+{
+  "name": "word-addin-copilot-public-panel",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Боковая панель Word-Add-in-Copilot-Public",
+  "scripts": {
+    "build": "tsc -p . && node scripts/copy-static.mjs",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "devDependencies": {
+    "@types/office-js": "^1.0.608",
+    "typescript": "^5.9.3"
+  }
+}

@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  MSI Word-Add-in-Copilot-Public (ТЗ, раздел 10). WiX Toolset 3.x. Собирается installer\build.ps1.
+
+  Два варианта из одного исходника (переменная Scope):
+
+  Scope=machine — для всех пользователей, нужны права администратора:
+    файлы в C:\Program Files\Word-Add-in-Copilot-Public\; шара \\localhost\WordAddinCopilotPublicManifests (Everyone: Read);
+    доверенный каталог + регистрация манифеста в Word (HKCU и разлив на все профили через Office
+    «User Settings», с зеркалом WOW6432Node); сертификат localhost от SYSTEM (machine-install);
+    автозапуск HKLM; HKLM\SOFTWARE\WordAddinCopilotPublic.
+
+  Scope=user — только для текущего пользователя, без прав администратора:
+    файлы в %LOCALAPPDATA%\Programs\Word-Add-in-Copilot-Public\; регистрация манифеста в Word (HKCU);
+    автозапуск HKCU; сертификат при первом запуске ставит само приложение в доверенные
+    текущего пользователя (Windows один раз спрашивает подтверждение). Шары и доверенного каталога
+    нет: их нельзя создать без администратора, а регистрации манифеста для кнопки на ленте достаточно.
+
+  Оба: ярлык в «Пуск», запуск сразу после установки, обновление поверх, закрытие работающего
+  приложения. Телеметрии и сетевых обращений нет. Удаление снимает регистрацию, сертификат и
+  автозапуск; папку legal-copilot не трогает.
+-->
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <?define CatalogId = "{e2a3ed11-1ca9-4e93-add9-6627fd534693}" ?>
+  <?define AddinId = "aa15c7aa-5190-47b1-8246-1f04218337ce" ?>
+  <?define ShareName = "WordAddinCopilotPublicManifests" ?>
+  <?define OfficeWef = "Software\Microsoft\Office\16.0\WEF" ?>
+  <?define UserSettings = "SOFTWARE\Microsoft\Office\16.0\User Settings\WordAddinCopilotPublic" ?>
+  <?if $(var.Scope) = "user" ?>
+    <?define UpgradeCode = "504a7d6e-8419-4c40-8fb1-6f4330e87614" ?>
+  <?else ?>
+    <?define UpgradeCode = "7453f93c-5605-4b02-bfb1-0f50a4234e85" ?>
+  <?endif ?>
+
+  <Product Id="*" Name="Word-Add-in-Copilot-Public" Language="1049" Codepage="1251"
+           Version="$(var.Version)" Manufacturer="Word-Add-in-Copilot-Public" UpgradeCode="$(var.UpgradeCode)">
+    <?if $(var.Scope) = "user" ?>
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perUser" InstallPrivileges="limited" Platform="x64"
+             SummaryCodepage="1251" Description="Word-Add-in-Copilot-Public для текущего пользователя" />
+    <?else ?>
+    <Package InstallerVersion="500" Compressed="yes" InstallScope="perMachine" Platform="x64"
+             SummaryCodepage="1251" Description="Word-Add-in-Copilot-Public для всех пользователей" />
+    <?endif ?>
+
+    <MajorUpgrade Schedule="afterInstallInitialize"
+                  DowngradeErrorMessage="Уже установлена более новая версия Word-Add-in-Copilot-Public." />
+    <MediaTemplate EmbedCab="yes" CompressionLevel="high" />
+
+    <Icon Id="AppIcon.ico" SourceFile="$(var.IconFile)" />
+    <Property Id="ARPPRODUCTICON" Value="AppIcon.ico" />
+    <Property Id="ARPNOMODIFY" Value="1" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/kulpanovichdenis-spec/Word-Add-in-Copilot-Public" />
+
+    <!-- Старый экземпляр держит файлы и порт: закрываем его при обновлении и удалении. -->
+    <util:CloseApplication Id="CloseTray" Target="WordAddinCopilotPublic.exe" CloseMessage="yes"
+                           TerminateProcess="1" RebootPrompt="no" />
+
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <?if $(var.Scope) = "user" ?>
+      <Directory Id="LocalAppDataFolder">
+        <Directory Id="UserPrograms" Name="Programs">
+          <Directory Id="INSTALLDIR" Name="Word-Add-in-Copilot-Public">
+            <Directory Id="ManifestsDir" Name="manifests" />
+            <Directory Id="AppDir" Name="app" />
+          </Directory>
+        </Directory>
+      </Directory>
+      <?else ?>
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLDIR" Name="Word-Add-in-Copilot-Public">
+          <Directory Id="ManifestsDir" Name="manifests" />
+          <Directory Id="AppDir" Name="app" />
+        </Directory>
+      </Directory>
+      <?endif ?>
+      <Directory Id="ProgramMenuFolder" />
+    </Directory>
+
+    <DirectoryRef Id="ProgramMenuFolder">
+      <Component Id="StartMenuShortcut" Guid="6B1D9E24-7A3C-4F58-8D06-2E9C4A7B5F31">
+        <Shortcut Id="AppShortcut" Name="Word-Add-in-Copilot-Public" Description="Word-Add-in-Copilot-Public для Word"
+                  Target="[AppDir]WordAddinCopilotPublic.exe" WorkingDirectory="AppDir" Icon="AppIcon.ico" />
+        <RegistryValue Root="HKCU" Key="Software\WordAddinCopilotPublic" Name="StartMenuShortcut"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="ManifestsDir">
+      <Component Id="Manifest" Guid="2E6B8D41-9F37-4C5A-A1D8-6E3F7B2C9D05">
+        <File Id="ManifestXml" Name="manifest.xml" Source="$(var.ManifestFile)" KeyPath="yes" />
+        <?if $(var.Scope) = "machine" ?>
+        <util:FileShare Id="ManifestsShare" Name="$(var.ShareName)" Description="Word-Add-in-Copilot-Public Manifests">
+          <!-- Право «Чтение» общей папки = GENERIC_READ | GENERIC_EXECUTE. -->
+          <util:FileSharePermission User="Everyone" GenericRead="yes" GenericExecute="yes" />
+        </util:FileShare>
+        <?endif ?>
+      </Component>
+    </DirectoryRef>
+
+    <?if $(var.Scope) = "machine" ?>
+    <util:User Id="Everyone" Name="Everyone" />
+
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="MachineRegistry" Guid="5A9C1E73-2B84-4F6D-9E07-3C8D5A1F7B26">
+        <RegistryKey Root="HKLM" Key="SOFTWARE\WordAddinCopilotPublic">
+          <RegistryValue Name="Version" Type="string" Value="[ProductVersion]" KeyPath="yes" />
+          <RegistryValue Name="ProductCode" Type="string" Value="[ProductCode]" />
+          <RegistryValue Name="InstallDir" Type="string" Value="[INSTALLDIR]" />
+        </RegistryKey>
+        <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run" Name="WordAddinCopilotPublic"
+                       Type="string" Value="&quot;[AppDir]WordAddinCopilotPublic.exe&quot;" />
+        <!-- Office применяет Create\... к каждому профилю при первом запуске (счётчик Count). -->
+        <RegistryKey Root="HKLM" Key="$(var.UserSettings)">
+          <RegistryValue Name="Count" Type="integer" Value="1" />
+          <RegistryKey Key="Create\$(var.OfficeWef)\TrustedCatalogs\$(var.CatalogId)">
+            <RegistryValue Name="Id" Type="string" Value="$(var.CatalogId)" />
+            <RegistryValue Name="Url" Type="string" Value="\\localhost\$(var.ShareName)" />
+            <RegistryValue Name="Flags" Type="integer" Value="1" />
+          </RegistryKey>
+          <RegistryKey Key="Create\$(var.OfficeWef)\Developer">
+            <RegistryValue Name="$(var.AddinId)" Type="string" Value="[ManifestsDir]manifest.xml" />
+          </RegistryKey>
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+
+    <!-- Зеркало для 32-разрядного Office (WOW6432Node). Только реестр — в TARGETDIR (ICE80). -->
+    <DirectoryRef Id="TARGETDIR">
+      <Component Id="MachineRegistry32" Guid="8D2F6A94-1C57-4E3B-B6A9-7F0E2D4C8A13" Win64="no">
+        <RegistryKey Root="HKLM" Key="$(var.UserSettings)">
+          <RegistryValue Name="Count" Type="integer" Value="1" KeyPath="yes" />
+          <RegistryKey Key="Create\$(var.OfficeWef)\TrustedCatalogs\$(var.CatalogId)">
+            <RegistryValue Name="Id" Type="string" Value="$(var.CatalogId)" />
+            <RegistryValue Name="Url" Type="string" Value="\\localhost\$(var.ShareName)" />
+            <RegistryValue Name="Flags" Type="integer" Value="1" />
+          </RegistryKey>
+          <RegistryKey Key="Create\$(var.OfficeWef)\Developer">
+            <RegistryValue Name="$(var.AddinId)" Type="string" Value="[ManifestsDir]manifest.xml" />
+          </RegistryKey>
+        </RegistryKey>
+      </Component>
+    </DirectoryRef>
+
+    <DirectoryRef Id="INSTALLDIR">
+      <!-- Пользователь, который ставит, получает надстройку сразу, без перезахода в Windows. -->
+      <Component Id="UserRegistry" Guid="3F7A1C58-6E92-4B0D-8C35-9A4E6F2B1D87">
+        <RegistryKey Root="HKCU" Key="$(var.OfficeWef)\TrustedCatalogs\$(var.CatalogId)">
+          <RegistryValue Name="Id" Type="string" Value="$(var.CatalogId)" KeyPath="yes" />
+          <RegistryValue Name="Url" Type="string" Value="\\localhost\$(var.ShareName)" />
+          <RegistryValue Name="Flags" Type="integer" Value="1" />
+        </RegistryKey>
+        <RegistryValue Root="HKCU" Key="$(var.OfficeWef)\Developer" Name="$(var.AddinId)"
+                       Type="string" Value="[ManifestsDir]manifest.xml" />
+      </Component>
+    </DirectoryRef>
+    <?else ?>
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="UserRegistry" Guid="C2A95E3B-7F14-4D86-9B50-1E8D3A6C4F72">
+        <RegistryKey Root="HKCU" Key="Software\WordAddinCopilotPublic">
+          <RegistryValue Name="Version" Type="string" Value="[ProductVersion]" KeyPath="yes" />
+          <RegistryValue Name="ProductCode" Type="string" Value="[ProductCode]" />
+          <RegistryValue Name="InstallDir" Type="string" Value="[INSTALLDIR]" />
+        </RegistryKey>
+        <RegistryValue Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="WordAddinCopilotPublic"
+                       Type="string" Value="&quot;[AppDir]WordAddinCopilotPublic.exe&quot;" />
+        <RegistryValue Root="HKCU" Key="$(var.OfficeWef)\Developer" Name="$(var.AddinId)"
+                       Type="string" Value="[ManifestsDir]manifest.xml" />
+      </Component>
+    </DirectoryRef>
+    <?endif ?>
+
+    <Feature Id="Main" Title="Word-Add-in-Copilot-Public" Level="1">
+      <ComponentGroupRef Id="AppFiles" />
+      <ComponentRef Id="Manifest" />
+      <ComponentRef Id="UserRegistry" />
+      <ComponentRef Id="StartMenuShortcut" />
+      <?if $(var.Scope) = "machine" ?>
+      <ComponentRef Id="MachineRegistry" />
+      <ComponentRef Id="MachineRegistry32" />
+      <?endif ?>
+    </Feature>
+
+    <?if $(var.Scope) = "machine" ?>
+    <!-- Сертификат localhost: выпуск и доверие (SYSTEM), откат, снятие при удалении. -->
+    <CustomAction Id="MachineInstallRollback" Directory="AppDir" Execute="rollback" Impersonate="no" Return="ignore"
+                  ExeCommand="&quot;[AppDir]WordAddinCopilotPublic.exe&quot; machine-uninstall" />
+    <CustomAction Id="MachineInstall" Directory="AppDir" Execute="deferred" Impersonate="no" Return="check"
+                  ExeCommand="&quot;[AppDir]WordAddinCopilotPublic.exe&quot; machine-install" />
+    <CustomAction Id="MachineUninstall" Directory="AppDir" Execute="deferred" Impersonate="no" Return="ignore"
+                  ExeCommand="&quot;[AppDir]WordAddinCopilotPublic.exe&quot; machine-uninstall" />
+    <InstallExecuteSequence>
+      <Custom Action="MachineInstallRollback" After="InstallFiles">NOT (REMOVE~="ALL")</Custom>
+      <Custom Action="MachineInstall" After="MachineInstallRollback">NOT (REMOVE~="ALL")</Custom>
+      <Custom Action="MachineUninstall" Before="RemoveFiles">REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+    <?else ?>
+    <!-- Сертификат ставит приложение при первом запуске; при удалении — снять из доверенных пользователя. -->
+    <CustomAction Id="UserUninstall" Directory="AppDir" Execute="deferred" Impersonate="yes" Return="ignore"
+                  ExeCommand="&quot;[AppDir]WordAddinCopilotPublic.exe&quot; user-uninstall" />
+    <InstallExecuteSequence>
+      <Custom Action="UserUninstall" Before="RemoveFiles">REMOVE~="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+    <?endif ?>
+
+    <!-- Запуск приложения сразу после установки. Из UI-последовательности: она выполняется в сеансе
+         юриста без повышенных прав. При тихой установке (/qn) приложение поднимет автозапуск. -->
+    <CustomAction Id="LaunchApp" Directory="AppDir" Execute="immediate" Impersonate="yes" Return="asyncNoWait"
+                  ExeCommand="&quot;[AppDir]WordAddinCopilotPublic.exe&quot;" />
+    <InstallUISequence>
+      <Custom Action="LaunchApp" After="ExecuteAction">NOT Installed AND NOT (REMOVE~="ALL")</Custom>
+    </InstallUISequence>
+  </Product>
+</Wix>
